@@ -122,7 +122,7 @@ void GLinit(int width, int height) {
 	/*Box::setupCube();
 	Axis::setupAxis();*/
 
-	bool res = loadOBJ("Knight.obj", vertices, uvs, normals);
+	bool res = loadOBJ("lambo.obj", vertices, uvs, normals);
 
 
 	Cube::setupCube();
