@@ -122,7 +122,7 @@ void GLinit(int width, int height) {
 	/*Box::setupCube();
 	Axis::setupAxis();*/
 
-	bool res = loadOBJ("cube.obj", vertices, uvs, normals);
+	bool res = loadOBJ("Knight.obj", vertices, uvs, normals);
 
 
 	Cube::setupCube();
@@ -995,7 +995,7 @@ void main() {\n\
 		objMat = transform;
 	}
 	void drawCube() {
-		glEnable(GL_PRIMITIVE_RESTART);
+		//glEnable(GL_PRIMITIVE_RESTART);
 		glBindVertexArray(cubeVao);
 		glUseProgram(cubeProgram);
 		glUniformMatrix4fv(glGetUniformLocation(cubeProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(objMat));
@@ -1003,7 +1003,7 @@ void main() {\n\
 		glUniformMatrix4fv(glGetUniformLocation(cubeProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
 		glUniform4f(glGetUniformLocation(cubeProgram, "color"), 0.1f, 1.f, 1.f, 0.f);
 		//glDrawElements(GL_TRIANGLE_STRIP, numVerts, GL_UNSIGNED_BYTE, 0);
-		glDrawArrays(GL_TRIANGLES, 0, 36);
+		glDrawArrays(GL_TRIANGLES, 0, 39000);
 
 
 		glUseProgram(0);
