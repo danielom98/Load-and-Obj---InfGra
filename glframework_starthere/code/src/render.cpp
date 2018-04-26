@@ -7,13 +7,16 @@
 #include "GL_framework.h"
 #include <vector>
 
-
+#include <imgui\imgui.h>
+#include <imgui\imgui_impl_sdl_gl3.h>
 //variables to load an object:
 
 std::vector< glm::vec3 > vertices;
 std::vector< glm::vec2 > uvs;
 std::vector< glm::vec3 > normals;
 
+
+glm::vec3 lightPos;
 
 
 extern bool loadOBJ(const char * path,
@@ -24,6 +27,36 @@ extern bool loadOBJ(const char * path,
 
 
 
+bool show_test_window = false;
+
+
+bool light_moves = true;
+void GUI() {
+	bool show = true;
+	ImGui::Begin("Simulation Parameters", &show, 0);
+
+	// Do your GUI code here....
+	{
+		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);//FrameRate
+
+
+		if (ImGui::Button("Toggle Light Move")) {
+			light_moves = !light_moves;
+
+		}
+
+
+	}
+	// .........................
+
+	ImGui::End();
+
+	// Example code -- ImGui test window. Most of the sample code is in ImGui::ShowTestWindow()
+	if (show_test_window) {
+		ImGui::SetNextWindowPos(ImVec2(650, 60), ImGuiSetCond_FirstUseEver);
+		ImGui::ShowTestWindow(&show_test_window);
+	}
+}
 
 ///////// fw decl
 namespace ImGui {
@@ -40,15 +73,19 @@ void cleanupAxis();
 void drawAxis();
 }
 
-namespace Cube {
-	void setupCube();
-	void cleanupCube();
-	void updateCube(const glm::mat4& transform);
-	void drawCube();
+namespace MyLoadedModel {
+	void setupModel();
+	void cleanupModel();
+	void updateModel(const glm::mat4& transform);
+	void drawModel();
 }
 
-
-
+namespace Sphere {
+	void setupSphere(glm::vec3 pos, float radius);
+	void cleanupSphere();
+	void updateSphere(glm::vec3 pos, float radius);
+	void drawSphere();
+}
 
 
 
@@ -57,7 +94,7 @@ namespace Cube {
 namespace RenderVars {
 	const float FOV = glm::radians(65.f);
 	const float zNear = 1.f;
-	const float zFar = 50.f;
+	const float zFar = 500.f;
 
 	glm::mat4 _projection;
 	glm::mat4 _modelView;
@@ -71,7 +108,7 @@ namespace RenderVars {
 		bool waspressed = false;
 	} prevMouse;
 
-	float panv[3] = { 0.f, -5.f, -15.f };
+	float panv[3] = { 0.f, -20.f, -50.f };
 	float rota[2] = { 0.f, 0.f };
 }
 namespace RV = RenderVars;
@@ -122,12 +159,13 @@ void GLinit(int width, int height) {
 	/*Box::setupCube();
 	Axis::setupAxis();*/
 
-	bool res = loadOBJ("lambo.obj", vertices, uvs, normals);
+	bool res = loadOBJ("farola.obj", vertices, uvs, normals);
 
+	MyLoadedModel::setupModel();
 
-	Cube::setupCube();
+	lightPos =  glm::vec3(40, 40, 0);
 
-
+	Sphere::setupSphere(lightPos, 1.0f);
 
 
 
@@ -139,8 +177,8 @@ void GLinit(int width, int height) {
 void GLcleanup() {
 	/*Box::cleanupCube();
 	Axis::cleanupAxis();*/
-	Cube::cleanupCube();
-
+	MyLoadedModel::cleanupModel();
+	Sphere::cleanupSphere();
 
 
 }
@@ -158,7 +196,13 @@ void GLrender(double currentTime) {
 	// render code
 	/*Box::drawCube();
 	Axis::drawAxis();*/
-	Cube::drawCube();
+
+	if(light_moves)
+		lightPos = glm::vec3(40 * cos((float)currentTime),40 * sin((float)currentTime), 0);
+
+	Sphere::updateSphere(lightPos, 1.0f);
+	Sphere::drawSphere();
+	MyLoadedModel::drawModel();
 
 	
 
@@ -859,76 +903,22 @@ void drawClothMesh() {
 }
 }
 
-////////////////////////////////////////////////// CUBE
-namespace Cube {
-	GLuint cubeVao;
-	GLuint cubeVbo[3];
-	GLuint cubeShaders[2];
-	GLuint cubeProgram;
+////////////////////////////////////////////////// MyModel
+namespace MyLoadedModel {
+	GLuint modelVao;
+	GLuint modelVbo[3];
+	GLuint modelShaders[2];
+	GLuint modelProgram;
 	glm::mat4 objMat = glm::mat4(1.f);
-
-	extern const float halfW = 0.5f;
-	int numVerts = 24 + 6; // 4 vertex/face * 6 faces + 6 PRIMITIVE RESTART
-
-	//   4---------7
-	//  /|        /|
-	// / |       / |
-	//5---------6  |
-	//|  0------|--3
-	//| /       | /
-	//|/        |/
-	//1---------2
-	glm::vec3 verts[] = {
-		glm::vec3(-halfW, -halfW, -halfW),
-		glm::vec3(-halfW, -halfW,  halfW),
-		glm::vec3(halfW, -halfW,  halfW),
-		glm::vec3(halfW, -halfW, -halfW),
-		glm::vec3(-halfW,  halfW, -halfW),
-		glm::vec3(-halfW,  halfW,  halfW),
-		glm::vec3(halfW,  halfW,  halfW),
-		glm::vec3(halfW,  halfW, -halfW)
-	};
-	glm::vec3 norms[] = {
-		glm::vec3(0.f, -1.f,  0.f),
-		glm::vec3(0.f,  1.f,  0.f),
-		glm::vec3(-1.f,  0.f,  0.f),
-		glm::vec3(1.f,  0.f,  0.f),
-		glm::vec3(0.f,  0.f, -1.f),
-		glm::vec3(0.f,  0.f,  1.f)
-	};
-
-	glm::vec3 cubeVerts[] = {
-		verts[1], verts[0], verts[2], verts[3],
-		verts[5], verts[6], verts[4], verts[7],
-		verts[1], verts[5], verts[0], verts[4],
-		verts[2], verts[3], verts[6], verts[7],
-		verts[0], verts[4], verts[3], verts[7],
-		verts[1], verts[2], verts[5], verts[6]
-	};
-	glm::vec3 cubeNorms[] = {
-		norms[0], norms[0], norms[0], norms[0],
-		norms[1], norms[1], norms[1], norms[1],
-		norms[2], norms[2], norms[2], norms[2],
-		norms[3], norms[3], norms[3], norms[3],
-		norms[4], norms[4], norms[4], norms[4],
-		norms[5], norms[5], norms[5], norms[5]
-	};
-	GLubyte cubeIdx[] = {
-		0, 1, 2, 3, UCHAR_MAX,
-		4, 5, 6, 7, UCHAR_MAX,
-		8, 9, 10, 11, UCHAR_MAX,
-		12, 13, 14, 15, UCHAR_MAX,
-		16, 17, 18, 19, UCHAR_MAX,
-		20, 21, 22, 23, UCHAR_MAX
-	};
-
 
 
 	
-	const char* cube_vertShader =
-	"#version 330\n\
+	const char* model_vertShader =
+		"#version 330\n\
 	in vec3 in_Position;\n\
 	in vec3 in_Normal;\n\
+	uniform vec3 lPos;\n\
+	out vec3 lDir;\n\
 	out vec4 vert_Normal;\n\
 	uniform mat4 objMat;\n\
 	uniform mat4 mv_Mat;\n\
@@ -936,79 +926,81 @@ namespace Cube {
 	void main() {\n\
 		gl_Position = mvpMat * objMat * vec4(in_Position, 1.0);\n\
 		vert_Normal = mv_Mat * objMat * vec4(in_Normal, 0.0);\n\
+		lDir = normalize(lPos - gl_Position.xyz );\n\
 	}";
 
 
-	const char* cube_fragShader =
+	const char* model_fragShader =
 		"#version 330\n\
 in vec4 vert_Normal;\n\
+in vec3 lDir;\n\
 out vec4 out_Color;\n\
 uniform mat4 mv_Mat;\n\
 uniform vec4 color;\n\
 void main() {\n\
-	out_Color = vec4(color.xyz * dot(vert_Normal, mv_Mat*vec4(0.0, 1.0, 0.0, 0.0)) + color.xyz * 0.3, 1.0 );\n\
+	out_Color = vec4(color.xyz * dot(vert_Normal, mv_Mat*vec4(lDir.x, lDir.y, lDir.z, 0.0)) , 1.0 );\n\
 }";
-	void setupCube() {
-		glGenVertexArrays(1, &cubeVao);
-		glBindVertexArray(cubeVao);
-		glGenBuffers(3, cubeVbo);
+	void setupModel() {
+		glGenVertexArrays(1, &modelVao);
+		glBindVertexArray(modelVao);
+		glGenBuffers(3, modelVbo);
 
-		glBindBuffer(GL_ARRAY_BUFFER, cubeVbo[0]);
+		glBindBuffer(GL_ARRAY_BUFFER, modelVbo[0]);
+		
 		glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices[0], GL_STATIC_DRAW);
-		//glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVerts), cubeVerts, GL_STATIC_DRAW);
 		glVertexAttribPointer((GLuint)0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 		glEnableVertexAttribArray(0);
 
-		glBindBuffer(GL_ARRAY_BUFFER, cubeVbo[1]);
+		glBindBuffer(GL_ARRAY_BUFFER, modelVbo[1]);
+	
 		glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(glm::vec3), &normals[0], GL_STATIC_DRAW);
-		//glBufferData(GL_ARRAY_BUFFER, sizeof(cubeNorms), cubeNorms, GL_STATIC_DRAW);
 		glVertexAttribPointer((GLuint)1, 3, GL_FLOAT, GL_FALSE, 0, 0);
 		glEnableVertexAttribArray(1);
 
-		glPrimitiveRestartIndex(UCHAR_MAX);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeVbo[2]);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIdx), cubeIdx, GL_STATIC_DRAW);
+	
 
 		glBindVertexArray(0);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-		cubeShaders[0] = compileShader(cube_vertShader, GL_VERTEX_SHADER, "cubeVert");
-		cubeShaders[1] = compileShader(cube_fragShader, GL_FRAGMENT_SHADER, "cubeFrag");
+		modelShaders[0] = compileShader(model_vertShader, GL_VERTEX_SHADER, "cubeVert");
+		modelShaders[1] = compileShader(model_fragShader, GL_FRAGMENT_SHADER, "cubeFrag");
 
-		cubeProgram = glCreateProgram();
-		glAttachShader(cubeProgram, cubeShaders[0]);
-		glAttachShader(cubeProgram, cubeShaders[1]);
-		glBindAttribLocation(cubeProgram, 0, "in_Position");
-		glBindAttribLocation(cubeProgram, 1, "in_Normal");
-		linkProgram(cubeProgram);
+		modelProgram = glCreateProgram();
+		glAttachShader(modelProgram, modelShaders[0]);
+		glAttachShader(modelProgram, modelShaders[1]);
+		glBindAttribLocation(modelProgram, 0, "in_Position");
+		glBindAttribLocation(modelProgram, 1, "in_Normal");
+		linkProgram(modelProgram);
 	}
-	void cleanupCube() {
-		glDeleteBuffers(3, cubeVbo);
-		glDeleteVertexArrays(1, &cubeVao);
+	void cleanupModel() {
+	
+		glDeleteBuffers(2, modelVbo);
+		glDeleteVertexArrays(1, &modelVao);
 
-		glDeleteProgram(cubeProgram);
-		glDeleteShader(cubeShaders[0]);
-		glDeleteShader(cubeShaders[1]);
+		glDeleteProgram(modelProgram);
+		glDeleteShader(modelShaders[0]);
+		glDeleteShader(modelShaders[1]);
 	}
-	void updateCube(const glm::mat4& transform) {
+	void updateModel(const glm::mat4& transform) {
 		objMat = transform;
 	}
-	void drawCube() {
-		//glEnable(GL_PRIMITIVE_RESTART);
-		glBindVertexArray(cubeVao);
-		glUseProgram(cubeProgram);
-		glUniformMatrix4fv(glGetUniformLocation(cubeProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(objMat));
-		glUniformMatrix4fv(glGetUniformLocation(cubeProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
-		glUniformMatrix4fv(glGetUniformLocation(cubeProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
-		glUniform4f(glGetUniformLocation(cubeProgram, "color"), 0.1f, 1.f, 1.f, 0.f);
-		//glDrawElements(GL_TRIANGLE_STRIP, numVerts, GL_UNSIGNED_BYTE, 0);
-		glDrawArrays(GL_TRIANGLES, 0, 39000);
+	void drawModel() {
+	
+		glBindVertexArray(modelVao);
+		glUseProgram(modelProgram);
+		glUniformMatrix4fv(glGetUniformLocation(modelProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(objMat));
+		glUniformMatrix4fv(glGetUniformLocation(modelProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
+		glUniformMatrix4fv(glGetUniformLocation(modelProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
+		glUniform3f(glGetUniformLocation(modelProgram, "lPos"), lightPos.x, lightPos.y, lightPos.z);
+		glUniform4f(glGetUniformLocation(modelProgram, "color"), 0.5f, .5f, 1.f, 0.f);
+	
+		glDrawArrays(GL_TRIANGLES, 0, 10000);
 
 
 		glUseProgram(0);
 		glBindVertexArray(0);
-		glDisable(GL_PRIMITIVE_RESTART);
+
 	}
 
 
